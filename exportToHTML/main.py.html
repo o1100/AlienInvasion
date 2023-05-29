@@ -1,0 +1,202 @@
+<html>
+<head>
+<title>main.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #000080; font-weight: bold;}
+.s1 { color: #000000;}
+.s2 { color: #808080; font-style: italic;}
+.s3 { color: #008000; font-weight: bold;}
+.s4 { color: #0000ff;}
+</style>
+</head>
+<body bgcolor="#ffffff">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#c0c0c0" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+main.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span>sys
+<span class="s0">import </span>pygame
+<span class="s0">from </span>time <span class="s0">import </span>sleep
+<span class="s0">from </span>settings <span class="s0">import </span>Settings
+<span class="s0">from </span>ship <span class="s0">import </span>Ship
+<span class="s0">from </span>bullet <span class="s0">import </span>Bullet
+<span class="s0">from </span>alien <span class="s0">import </span>Alien
+<span class="s0">from </span>game_stats <span class="s0">import </span>GameStats
+
+<span class="s0">class </span>AlienInvasion:
+    <span class="s0">def </span>__init__(self):
+        pygame.init()
+        self.settings = Settings()
+        self.screen = pygame.display.set_mode((self.settings.screen_width, self.settings.screen_height))
+
+        <span class="s2">#for fullscreen</span>
+        <span class="s2">#self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)</span>
+        <span class="s2">#self.settings.screen_width = self.screen.get_rect().width</span>
+        <span class="s2">#self.settings.screen_height = self.screen.get_rect().height</span>
+        <span class="s2">######</span>
+
+        pygame.display.set_caption (<span class="s3">&quot;Aussie Ollies Alien Invasion&quot;</span>)
+        self.stats = GameStats(self)
+        self.bg_color = (<span class="s4">100</span>, <span class="s4">100</span>, <span class="s4">100</span>)
+        self.ship = Ship(self)
+        self.bullets = pygame.sprite.Group()
+        self.aliens = pygame.sprite.Group()
+        self._create_fleet()
+
+
+    <span class="s0">def </span>run_game(self):
+        <span class="s0">while True</span>:
+            self._check_events()
+            <span class="s0">if </span>self.stats.game_active:
+                self.ship.update()
+                self._update_bullets()
+                self._update_aliens()
+            self._update_screen()
+
+    <span class="s0">def </span>_check_events(self):
+        <span class="s0">for </span>event <span class="s0">in </span>pygame.event.get():
+            <span class="s0">if </span>event.type == pygame.QUIT:
+                sys.exit()
+            <span class="s0">elif </span>event.type == pygame.KEYDOWN:
+                self._check_keydown_events(event)
+            <span class="s0">elif </span>event.type == pygame.KEYUP:
+                self._check_keyup_events(event)
+
+    <span class="s0">def </span>_check_keydown_events(self, event):
+        <span class="s0">if </span>event.key == pygame.K_RIGHT:
+            self.ship.moving_right = <span class="s0">True</span>
+        <span class="s0">elif </span>event.key == pygame.K_LEFT:
+            self.ship.moving_left = <span class="s0">True</span>
+        <span class="s0">elif </span>event.key == pygame.K_q:
+            sys.exit()
+        <span class="s0">elif </span>event.key == pygame.K_SPACE:
+            self._fire_bullet()
+
+    <span class="s0">def </span>_check_keyup_events(self, event):
+        <span class="s0">if </span>event.key == pygame.K_RIGHT:
+            self.ship.moving_right = <span class="s0">False</span>
+        <span class="s0">elif </span>event.key == pygame.K_LEFT:
+            self.ship.moving_left = <span class="s0">False</span>
+
+    <span class="s0">def </span>_fire_bullet(self):
+        <span class="s0">if </span>len(self.bullets) &lt; self.settings.bullets_allowed:
+            new_bullet = Bullet(self)
+            self.bullets.add(new_bullet)
+
+    <span class="s0">def </span>_update_bullets(self):
+    <span class="s2"># Update positions of the bullets and get rid of old bullets.</span>
+        self.bullets.update()
+        <span class="s0">for </span>bullet <span class="s0">in </span>self.bullets.copy():
+            <span class="s0">if </span>bullet.rect.bottom &lt;= <span class="s4">0</span>:
+                self.bullets.remove(bullet)
+        self._check_bullet_alien_collisions()
+
+    <span class="s0">def </span>_check_bullet_alien_collisions(self):
+        collisions = pygame.sprite.groupcollide(self.bullets, self.aliens, <span class="s0">True</span>, <span class="s0">True</span>)
+        <span class="s0">if </span>collisions:
+            self.stats.aliensKilled = self.stats.aliensKilled + <span class="s4">1</span>
+            print(self.stats.aliensKilled)
+    <span class="s2"># Check to see if the aliens group is empty and if so, create a new fleet</span>
+        <span class="s0">if not </span>self.aliens:
+            self.bullets.empty()
+            self._create_fleet()
+
+    <span class="s0">def </span>livesCounter(self):
+        self.settings.ship_limit = self.settings.ship_limit -<span class="s4">1</span>
+        print(<span class="s3">'Ships remaining: '</span>+str(self.settings.ship_limit+<span class="s4">1</span>))
+
+    <span class="s0">def </span>_update_aliens(self):
+        self._check_fleet_edges()
+        self.aliens.update()
+        <span class="s0">if </span>pygame.sprite.spritecollideany(self.ship, self.aliens):
+            print(<span class="s3">&quot;SHIP HIT!!!&quot;</span>)
+            self._ship_hit()
+            self.livesCounter()
+        self._check_aliens_bottom()
+
+
+    <span class="s0">def </span>_create_fleet(self):
+        aliens = Alien(self)
+        alien_width, alien_height = aliens.rect.size
+    <span class="s2"># Determine how much space you have on the screen for aliens</span>
+        available_space_x = self.settings.screen_width - (<span class="s4">2 </span>* alien_width)
+        number_aliens_x = available_space_x // (<span class="s4">2 </span>* alien_width)
+    <span class="s2"># Determine the number of rows of aliens that fit on the screen</span>
+        ship_height = self.ship.rect.height
+        available_space_y = (self.settings.screen_height - (<span class="s4">3 </span>* alien_height) - ship_height)
+        number_rows = available_space_y // (<span class="s4">2 </span>* alien_height)
+    <span class="s2"># Create the full fleet of aliens</span>
+        <span class="s0">for </span>row_number <span class="s0">in </span>range(number_rows):
+            <span class="s0">for </span>alien_number <span class="s0">in </span>range(number_aliens_x):
+                self._create_alien(alien_number, row_number)
+
+    <span class="s0">def </span>_create_alien(self, alien_number, row_number):
+        aliens = Alien(self)
+        alien_width, alien_height = aliens.rect.size
+        alien_width = aliens.rect.width
+        aliens.x = alien_width + <span class="s4">2 </span>* alien_width * alien_number
+        aliens.rect.x = aliens.x
+        aliens.rect.y = alien_height + <span class="s4">2 </span>* aliens.rect.height * row_number
+        self.aliens.add(aliens)
+
+    <span class="s0">def </span>_check_fleet_edges(self):
+    <span class="s2"># Respond appropriately if any aliens have reached an edge</span>
+        <span class="s0">for </span>alien <span class="s0">in </span>self.aliens.sprites():
+            <span class="s0">if </span>alien.check_edges():
+                self._change_fleet_direction()
+                <span class="s0">break</span>
+
+    <span class="s0">def </span>_change_fleet_direction(self):
+    <span class="s2"># Drop the entire fleet and change the fleet's direction</span>
+        <span class="s0">for </span>alien <span class="s0">in </span>self.aliens.sprites():
+            alien.rect.y += self.settings.fleet_drop_speed
+        self.settings.fleet_direction *= -<span class="s4">1</span>
+
+    <span class="s0">def </span>_ship_hit(self):
+        <span class="s0">if </span>self.stats.ships_left &gt; <span class="s4">0</span>:
+            self.stats.ships_left -= <span class="s4">1</span>
+    <span class="s2"># Get rid of any remianing aliens and bullets</span>
+            self.aliens.empty()
+            self.bullets.empty()
+    <span class="s2"># Create a new fleet and cneter the ship</span>
+            self._create_fleet()
+            self.ship.center_ship()
+    <span class="s2"># Pause for half a second</span>
+            sleep(<span class="s4">0.5</span>)
+        <span class="s0">else</span>:
+            self.stats.game_active = <span class="s0">False</span>
+
+    <span class="s0">def </span>_check_aliens_bottom(self):
+        screen_rect = self.screen.get_rect()
+        <span class="s0">for </span>alien <span class="s0">in </span>self.aliens.sprites():
+            <span class="s0">if </span>alien.rect.bottom &gt;= screen_rect.bottom:
+                self._ship_hit()
+                <span class="s0">break</span>
+
+    <span class="s0">def </span>showScore(self):
+        font = pygame.font.Font(<span class="s3">'freesansbold.ttf'</span>, <span class="s4">32</span>)
+        lives = font.render(<span class="s3">'Lives: ' </span>+ str(self.settings.ship_limit+<span class="s4">1</span>), <span class="s0">True</span>, (<span class="s4">0</span>, <span class="s4">0</span>, <span class="s4">0</span>))
+        self.screen.blit(lives, (<span class="s4">20</span>, <span class="s4">20</span>))
+
+        aliens = font.render(<span class="s3">'Aliens destroyed: ' </span>+ str(self.stats.aliensKilled), <span class="s0">True</span>, (<span class="s4">0</span>, <span class="s4">0</span>, <span class="s4">0</span>))
+        self.screen.blit(aliens, (<span class="s4">800</span>, <span class="s4">20</span>))
+
+    <span class="s0">def </span>_update_screen(self):
+        self.screen.fill(self.settings.bg_color)
+        self.ship.blitme()
+        <span class="s0">for </span>bullet <span class="s0">in </span>self.bullets.sprites():
+            bullet.draw_bullet()
+        self.aliens.draw(self.screen)
+        self.showScore()
+        pygame.display.flip()
+
+
+
+<span class="s0">if </span>__name__ == <span class="s3">'__main__'</span>:
+    ai = AlienInvasion()
+    ai.run_game()
+quit()</pre>
+</body>
+</html>
